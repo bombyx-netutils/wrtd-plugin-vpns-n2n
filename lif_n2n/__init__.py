@@ -42,6 +42,9 @@ class _PluginObject:
         self._stopN2nEdgeNode()
         self._stopN2nSupernode()
 
+    def get_bridge(self):
+        return None
+
     def interface_appear(self, ifname):
         if ifname == "wrt-lif-n2n":
             _Util.addInterfaceToBridge(self.brname, ifname)
