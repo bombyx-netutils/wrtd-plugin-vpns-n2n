@@ -25,10 +25,9 @@ def get_plugin(name):
 
 class _PluginObject:
 
-    def init2(self, instanceName, cfg, brname, tmpDir):
+    def init2(self, instanceName, cfg, tmpDir):
         assert instanceName == ""
         self.cfg = cfg
-        self.brname = brname
         self.tmpDir = tmpDir
 
         self.n2nSupernodeProc = None
@@ -45,9 +44,9 @@ class _PluginObject:
     def get_bridge(self):
         return None
 
-    def interface_appear(self, ifname):
+    def interface_appear(self, bridge, ifname):
         if ifname == "wrt-lif-n2n":
-            _Util.addInterfaceToBridge(self.brname, ifname)
+            _Util.addInterfaceToBridge(bridge.get_name(), ifname)
             return True
         else:
             return False
