@@ -25,7 +25,7 @@ def get_plugin(name):
 
 class _PluginObject:
 
-    def init2(self, instanceName, cfg, tmpDir):
+    def init2(self, instanceName, cfg, tmpDir, varDir):
         assert instanceName == ""
         self.cfg = cfg
         self.tmpDir = tmpDir
@@ -55,7 +55,7 @@ class _PluginObject:
         pass
 
     def _runN2nSupernode(self):
-        supernodeLogFile = os.path.join(self.tmpDir, "n2n-supernode.log")
+        supernodeLogFile = os.path.join(self.tmpDir, "supernode.log")
         cmd = "/usr/sbin/supernode -f >%s 2>%s" % (supernodeLogFile, supernodeLogFile)
         self.n2nSupernodeProc = subprocess.Popen(cmd, shell=True, universal_newlines=True)
 
@@ -66,7 +66,7 @@ class _PluginObject:
             self.n2nSupernodeProc = None
 
     def _runN2nEdgeNode(self):
-        edgeLogFile = os.path.join(self.tmpDir, "n2n-edge.log")
+        edgeLogFile = os.path.join(self.tmpDir, "edge.log")
 
         cmd = "/usr/sbin/edge -f "
         cmd += "-l 127.0.0.1:7654 "
