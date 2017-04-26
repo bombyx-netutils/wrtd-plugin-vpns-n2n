@@ -78,7 +78,7 @@ class _PluginObject:
         cmd += ">%s 2>%s" % (edgeLogFile, edgeLogFile)
         self.proc = subprocess.Popen(cmd, shell=True, universal_newlines=True)
 
-    def _stopN2nEdgeNode(self, proc):
+    def _stopN2nEdgeNode(self):
         if self.proc is not None:
             self.proc.terminate()
             self.proc.wait()
