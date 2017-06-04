@@ -25,10 +25,11 @@ def get_plugin(name):
 
 class _PluginObject:
 
-    def init2(self, instanceName, cfg, tmpDir, varDir):
+    def init2(self, instanceName, cfg, tmpDir, varDir, firewallAllowFunc):
         assert instanceName == ""
         self.cfg = cfg
         self.tmpDir = tmpDir
+        self.firewallAllowFunc = firewallAllowFunc
 
         self.n2nSupernodeProc = None
         self.proc = None
@@ -36,6 +37,7 @@ class _PluginObject:
     def start(self):
         self._runN2nSupernode()
         self._runN2nEdgeNode()
+        self.firewallAllowFunc("udp dport 7654")
 
     def stop(self):
         self._stopN2nEdgeNode()
