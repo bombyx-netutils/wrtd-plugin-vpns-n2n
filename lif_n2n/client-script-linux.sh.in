@@ -1,0 +1,61 @@
+#!/bin/bash
+
+g_n2n_client() {
+    echo "not supported yet."
+}
+
+g_n2n_networkmanager() {
+    echo "not supported yet."
+}
+
+g_n2n_wrtd() {
+    local CFGF=/etc/wrtd/wan-vpn.json
+
+    local BUF=""
+    BUF="${BUF}{\"plugin\":\"n2n\","
+    BUF="${BUF}\"supernode\":\"$SUPER_IP:$SUPER_PORT\","
+    BUF="${BUF}\"community\":\"vpn\","
+    BUF="${BUF}\"key\":\"$KEY\"}"
+
+    echo $BUF > $CFGF
+
+    echo "WRTD wvpn connection configuration file created at ${CFGF}."
+}
+
+usage() {
+    echo "Usage:"
+    echo "  $0 help"
+    echo "  $0 <client-program>    options are \"n2n\", \"networkmanager\" and \"wrtd-wvpn\""
+}
+
+KEY="@client_key@"
+SUPER_IP="@super_node_ip@"
+SUPER_PORT="@super_node_port@"
+
+if [ "$(id -u)" != "0"] ; then
+    echo "Superuser access is required."
+    exit 0
+fi
+
+if [ "$1" == "help" ] ; then
+    usage
+    exit 0
+fi
+
+if [ "$1" == "n2n" ] ; then
+    g_n2n_client
+    exit 0
+fi
+
+if [ "$1" == "networkmanager" ] ; then
+    g_n2n_networkmanager
+    exit 0
+fi
+
+if [ "$1" == "wrtd-wvpn" ] ; then
+    g_n2n_wrtd
+    exit 0
+fi
+
+usage
+exit 1

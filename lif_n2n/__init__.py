@@ -54,6 +54,21 @@ class _PluginObject:
     def interface_disappear(self, ifname):
         pass
 
+    def generate_client_script(self, ostype):
+        if ostype == "linux":
+            selfdir = os.path.dirname(os.path.realpath(__file__))
+            buf = ""
+            with open(os.path.join(selfdir, "client-script-linux.sh.in")) as f:
+                buf = f.read()
+            buf = buf.replace("@client_key@", "123456")                     # fixme
+            buf = buf.replace("@super_node_ip@", "123.56.97.115")           # fixme
+            buf = buf.replace("@super_node_port@", str(7654))
+            return ("client-script.sh", buf)
+        elif ostype == "win32":
+            assert False            # fixme, should create a bat script show it is not supported
+        else:
+            assert False
+
     def _runN2nSupernode(self):
         supernodeLogFile = os.path.join(self.tmpDir, "supernode.log")
         cmd = "/usr/sbin/supernode -f >%s 2>%s" % (supernodeLogFile, supernodeLogFile)
