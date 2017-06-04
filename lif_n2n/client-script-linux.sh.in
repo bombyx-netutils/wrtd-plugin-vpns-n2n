@@ -32,7 +32,7 @@ KEY="@client_key@"
 SUPER_IP="@super_node_ip@"
 SUPER_PORT="@super_node_port@"
 
-if [ "$(id -u)" != "0"] ; then
+if [ "$(id -u)" != "0" ] ; then
     echo "Superuser access is required."
     exit 0
 fi
