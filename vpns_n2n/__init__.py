@@ -2,12 +2,18 @@
 # -*- coding: utf-8; tab-width: 4; indent-tabs-mode: t -*-
 
 import os
+import re
 import pwd
 import grp
+import shutil
 import socket
 import struct
 import fcntl
+import signal
+import ipaddress
 import subprocess
+from gi.repository import GLib
+from gi.repository import GObject
 
 
 def get_plugin_list():
@@ -267,14 +273,14 @@ class _VirtualBridge:
             self.dnsmasqProc.terminate()
             self.dnsmasqProc.wait()
             self.dnsmasqProc = None
-        WrtUtil.forceDelete(self.pidFile)
-        WrtUtil.forceDelete(self.leasesFile)
-        WrtUtil.forceDelete(self.hostsDir)
-        WrtUtil.forceDelete(self.myhostnameFile)
+        _Util.forceDelete(self.pidFile)
+        _Util.forceDelete(self.leasesFile)
+        _Util.forceDelete(self.hostsDir)
+        _Util.forceDelete(self.myhostnameFile)
 
     def _leaseScan(self):
         try:
-            ret = set(WrtUtil.readDnsmasqLeaseFile(self.leasesFile))
+            ret = set(_Util.readDnsmasqLeaseFile(self.leasesFile))
 
             # host disappear
             setDisappear = self.lastScanRecord - ret
@@ -299,6 +305,15 @@ class _VirtualBridge:
 class _Util:
 
     @staticmethod
+    def forceDelete(filename):
+        if os.path.islink(filename):
+            os.remove(filename)
+        elif os.path.isfile(filename):
+            os.remove(filename)
+        elif os.path.isdir(filename):
+            shutil.rmtree(filename)
+
+    @staticmethod
     def addInterfaceToBridge(brname, ifname):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
@@ -310,3 +325,27 @@ class _Util:
             fcntl.ioctl(s.fileno(), 0x89a2, ifreq)                          # SIOCBRADDIF
         finally:
             s.close()
+
+    @staticmethod
+    def readDnsmasqLeaseFile(filename):
+        """dnsmasq leases file has the following format:
+             1108086503   00:b0:d0:01:32:86 142.174.150.208 M61480    01:00:b0:d0:01:32:86
+             ^            ^                 ^               ^         ^
+             Expiry time  MAC address       IP address      hostname  Client-id
+
+           This function returns [(mac,ip,hostname), (mac,ip,hostname)]
+        """
+
+        pattern = "[0-9]+ +([0-9a-f:]+) +([0-9\.]+) +(\\S+) +\\S+"
+        ret = []
+        with open(filename, "r") as f:
+            for line in f.read().split("\n"):
+                m = re.match(pattern, line)
+                if m is None:
+                    continue
+                if m.group(3) == "*":
+                    item = (m.group(1), m.group(2), "")
+                else:
+                    item = (m.group(1), m.group(2), m.group(3))
+                ret.append(item)
+        return ret
