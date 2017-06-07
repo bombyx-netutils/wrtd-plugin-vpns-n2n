@@ -1,6 +1,6 @@
 PACKAGE_VERSION=0.0.1
 prefix=/usr
-plugin=lif_n2n
+plugin=vpns_n2n
 
 all:
 
