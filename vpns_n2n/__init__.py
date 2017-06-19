@@ -46,8 +46,10 @@ class _PluginObject:
     def start(self):
         self._runN2nSupernode()
         self.bridge._runN2nEdgeNode()
+        self.bridge._runDnsmasq()
 
     def stop(self):
+        self.bridge._stopDnsmasq()
         self.bridge._stopN2nEdgeNode()
         self._stopN2nSupernode()
 
