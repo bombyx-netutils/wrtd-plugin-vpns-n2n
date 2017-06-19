@@ -5,12 +5,14 @@ import os
 import re
 import pwd
 import grp
+import time
 import shutil
 import socket
 import struct
 import fcntl
 import signal
 import ipaddress
+import netifaces
 import subprocess
 from gi.repository import GLib
 from gi.repository import GObject
@@ -96,7 +98,7 @@ class _VirtualBridge:
         self.clientAppearFunc = clientAppearFunc
         self.clientDisappearFunc = clientDisappearFunc
 
-        self.brname = "wrtd-n2n"
+        self.brname = "wrtd-vpns-n2n"
         self.brnetwork = ipaddress.IPv4Network(prefix[0] + "/" + prefix[1])
 
         self.brip = ipaddress.IPv4Address(prefix[0]) + 1
@@ -107,6 +109,7 @@ class _VirtualBridge:
         self.myhostnameFile = os.path.join(self.pObj.tmpDir, "dnsmasq.myhostname")
         self.selfHostFile = os.path.join(self.pObj.tmpDir, "dnsmasq.self")
         self.hostsDir = os.path.join(self.pObj.tmpDir, "hosts.d")
+        self.leasesFile = os.path.join(self.pObj.tmpDir, "dnsmasq.leases")
         self.pidFile = os.path.join(self.pObj.tmpDir, "dnsmasq.pid")
         self.dnsmasqProc = None
         self.leaseScanTimer = None
@@ -135,12 +138,15 @@ class _VirtualBridge:
         cmd = "/usr/sbin/edge -f "
         cmd += "-l 127.0.0.1:7654 "
         cmd += "-r -a %s -s %s " % (self.brip, self.brnetwork.netmask)
-        cmd += "-d wrt-vpns-n2n "
+        cmd += "-d wrtd-vpns-n2n "
         cmd += "-c vpn "
         cmd += "-k 123456 "
         cmd += "-u %d -g %d " % (pwd.getpwnam("nobody").pw_uid, grp.getgrnam("nobody").gr_gid)
         cmd += ">%s 2>%s" % (edgeLogFile, edgeLogFile)
         self.edgeProc = subprocess.Popen(cmd, shell=True, universal_newlines=True)
+
+        while "wrtd-vpns-n2n" not in netifaces.interfaces():
+            time.sleep(1.0)
 
     def _stopN2nEdgeNode(self):
         if self.edgeProc is not None:
@@ -221,7 +227,8 @@ class _VirtualBridge:
         buf = ""
         buf += "strict-order\n"
         buf += "bind-interfaces\n"                                       # don't listen on 0.0.0.0
-        buf += "interface=lo,%s\n" % (self.brname)
+        buf += "interface=%s\n" % (self.brname)
+        buf += "except-interface=lo\n"                                   # don't listen on 127.0.0.1
         buf += "user=root\n"
         buf += "group=root\n"
         buf += "\n"
@@ -237,7 +244,7 @@ class _VirtualBridge:
         buf += "addn-hosts=%s\n" % (self.hostsDir)                       # "hostsdir=" only adds record, no deletion, so not usable
         buf += "addn-hosts=%s\n" % (self.myhostnameFile)                 # we use addn-hosts which has no inotify, and we send SIGHUP to dnsmasq when host file changes
         buf += "\n"
-        cfgf = os.path.join(self.tmpDir, "dnsmasq.conf")
+        cfgf = os.path.join(self.pObj.tmpDir, "dnsmasq.conf")
         with open(cfgf, "w") as f:
             f.write(buf)
 
