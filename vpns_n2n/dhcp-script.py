@@ -5,10 +5,6 @@ import json
 import socket
 
 
-with open("/a.txt", "a") as f:
-    f.write(sys.argv)
-
-
 serverFile = "/tmp/wrtd/vpns-n2n/cmd.socket"        # fixme
 
 data = dict()
