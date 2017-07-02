@@ -281,7 +281,7 @@ class _VirtualBridge:
             # host disappear
             setDisappear = self.lastScanRecord - ret
             ipList = [x[1] for x in setDisappear]
-            self.clientDisappearFunc(ipList, self.get_bridge_id())
+            self.clientDisappearFunc(self.get_bridge_id(), ipList)
             for mac, ip, hostname in setDisappear:
                 if hostname != "":
                     self.pObj.logger.info("Client %s(IP:%s, MAC:%s) disappeared." % (hostname, ip, mac))
@@ -299,11 +299,11 @@ class _VirtualBridge:
                     self.pObj.logger.info("Client %s(IP:%s, MAC:%s) appeared." % (hostname, ip, mac))
                 else:
                     self.pObj.logger.info("Client %s(%s) appeared." % (ip, mac))
-            self.clientAppearFunc(ipDataDict, self.get_bridge_id())
+            self.clientAppearFunc(self.get_bridge_id(), ipDataDict)
 
             self.lastScanRecord = ret
         except:
-            self.pObj.logger.error("Lease scan failed", exc_info=True)
+            self.pObj.logger.error("Lease scan failed.", exc_info=True)
         finally:
             return True
 
