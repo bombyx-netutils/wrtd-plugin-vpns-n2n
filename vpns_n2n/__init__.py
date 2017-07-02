@@ -294,7 +294,6 @@ class _VirtualBridge:
             ipDataDict = dict()
             for mac, ip, hostname in setAppear:
                 ipDataDict[ip] = dict()
-                ipDataDict[ip]["wakeup-mac"] = mac
                 if hostname != "":
                     ipDataDict[ip]["hostname"] = hostname
                     self.pObj.logger.info("Client %s(IP:%s, MAC:%s) appeared." % (hostname, ip, mac))
