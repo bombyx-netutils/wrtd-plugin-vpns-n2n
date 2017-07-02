@@ -2,21 +2,18 @@
 # -*- coding: utf-8; tab-width: 4; indent-tabs-mode: t -*-
 
 import os
-import re
 import pwd
 import grp
 import time
-import fcntl
+import json
 import signal
 import shutil
 import socket
-import struct
 import logging
 import ipaddress
 import netifaces
 import subprocess
 from gi.repository import GLib
-from gi.repository import GObject
 
 
 def get_plugin_list():
@@ -51,8 +48,10 @@ class _PluginObject:
         self._runN2nSupernode()
         self.bridge._runN2nEdgeNode()
         self.bridge._runDnsmasq()
+        self.bridge._runCmdServer()
 
     def stop(self):
+        self.bridge._stopCmdServer()
         self.bridge._stopDnsmasq()
         self.bridge._stopN2nEdgeNode()
         self._stopN2nSupernode()
@@ -108,14 +107,16 @@ class _VirtualBridge:
 
         self.edgeProc = None
 
+        self.serverFile = os.path.join(self.pObj.tmpDir, "cmd.socket")
+        self.cmdSock = None
+        self.cmdSockWatch = None
+
         self.myhostnameFile = os.path.join(self.pObj.tmpDir, "dnsmasq.myhostname")
         self.selfHostFile = os.path.join(self.pObj.tmpDir, "dnsmasq.self")
         self.hostsDir = os.path.join(self.pObj.tmpDir, "hosts.d")
         self.leasesFile = os.path.join(self.pObj.tmpDir, "dnsmasq.leases")
         self.pidFile = os.path.join(self.pObj.tmpDir, "dnsmasq.pid")
         self.dnsmasqProc = None
-        self.leaseScanTimer = None
-        self.lastScanRecord = None
 
     def get_name(self):
         return self.brname
@@ -213,7 +214,22 @@ class _VirtualBridge:
                 f.write(buf2)
             self.dnsmasqProc.send_signal(signal.SIGHUP)
 
+    def _runCmdServer(self):
+        self.cmdSock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        self.cmdSock.bind(self.serverFile)
+        self.cmdSockWatch = GLib.io_add_watch(self.cmdSock, GLib.IO_IN, self.__cmdServerWatch)
+
+    def _stopCmdServer(self):
+        if self.cmdSockWatch is not None:
+            GLib.source_remove(self.cmdSockWatch)
+            self.cmdSockWatch = None
+        if self.cmdSock is not None:
+            self.cmdSock.close()
+            self.cmdSock = None
+
     def _runDnsmasq(self):
+        selfdir = os.path.dirname(os.path.realpath(__file__))
+
         # myhostname file
         with open(self.myhostnameFile, "w") as f:
             f.write("%s %s\n" % (self.brip, socket.gethostname()))
@@ -238,6 +254,7 @@ class _VirtualBridge:
         buf += "dhcp-range=%s,%s,%s,360\n" % (self.dhcpRange[0], self.dhcpRange[1], self.brnetwork.netmask)
         buf += "dhcp-option=option:T1,180\n"                             # strange that dnsmasq's T1=165s, change to 180s which complies to RFC
         buf += "dhcp-leasefile=%s\n" % (self.leasesFile)
+        buf += "dhcp-script=%s\n" % (os.path.join(selfdir, "dhcp-script.py"))
         buf += "\n"
         buf += "domain-needed\n"
         buf += "bogus-priv\n"
@@ -257,14 +274,7 @@ class _VirtualBridge:
         cmd += " --pid-file=%s" % (self.pidFile)
         self.dnsmasqProc = subprocess.Popen(cmd, shell=True, universal_newlines=True)
 
-        self.lastScanRecord = set()
-        self.leaseScanTimer = GObject.timeout_add_seconds(10, self._leaseScan)
-
     def _stopDnsmasq(self):
-        if self.leaseScanTimer is not None:
-            GLib.source_remove(self.leaseScanTimer)
-            self.leaseScanTimer = None
-            self.lastScanRecord = None
         if self.dnsmasqProc is not None:
             self.dnsmasqProc.terminate()
             self.dnsmasqProc.wait()
@@ -274,37 +284,24 @@ class _VirtualBridge:
         _Util.forceDelete(self.hostsDir)
         _Util.forceDelete(self.myhostnameFile)
 
-    def _leaseScan(self):
+    def __cmdServerWatch(self, source, cb_condition):
         try:
-            ret = set(_Util.readDnsmasqLeaseFile(self.leasesFile))
-
-            # host disappear
-            setDisappear = self.lastScanRecord - ret
-            ipList = [x[1] for x in setDisappear]
-            if len(ipList) > 0:
-                self.clientDisappearFunc(self.get_bridge_id(), ipList)
-                for mac, ip, hostname in setDisappear:
-                    if hostname != "":
-                        self.pObj.logger.info("Client %s(IP:%s, MAC:%s) disappeared." % (hostname, ip, mac))
-                    else:
-                        self.pObj.logger.info("Client %s(%s) disappeared." % (ip, mac))
-
-            # host appear
-            setAppear = ret - self.lastScanRecord
-            ipDataDict = dict()
-            for mac, ip, hostname in setAppear:
-                ipDataDict[ip] = dict()
-                if hostname != "":
-                    ipDataDict[ip]["hostname"] = hostname
-                    self.pObj.logger.info("Client %s(IP:%s, MAC:%s) appeared." % (hostname, ip, mac))
-                else:
-                    self.pObj.logger.info("Client %s(%s) appeared." % (ip, mac))
-            if len(ipDataDict) > 0:
-                self.clientAppearFunc(self.get_bridge_id(), ipDataDict)
-
-            self.lastScanRecord = ret
+            buf = self.cmdSock.recvfrom(4096).decode("utf-8")
+            jsonObj = json.loads(buf)
+            if jsonObj["cmd"] == "add-or-change":
+                # notify lan manager
+                data = dict()
+                data[jsonObj["ip"]] = dict()
+                data[jsonObj["ip"]]["hostname"] = jsonObj["hostname"]
+                self.clientAppearFunc(self.get_bridge_id(), data)
+            elif jsonObj["cmd"] == "del":
+                # notify lan manager
+                data = [jsonObj["ip"]]
+                self.clientDisappearFunc(self.get_bridge_id(), data)
+            else:
+                assert False
         except:
-            self.pObj.logger.error("Lease scan failed.", exc_info=True)
+            self.logger.error("receive error", exc_info=True)       # fixme
         finally:
             return True
 
@@ -319,40 +316,3 @@ class _Util:
             os.remove(filename)
         elif os.path.isdir(filename):
             shutil.rmtree(filename)
-
-    @staticmethod
-    def addInterfaceToBridge(brname, ifname):
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            ifreq = struct.pack("16si", ifname.encode("ascii"), 0)
-            ret = fcntl.ioctl(s.fileno(), 0x8933, ifreq)                    # SIOCGIFINDEX
-            ifindex = struct.unpack("16si", ret)[1]
-
-            ifreq = struct.pack("16si", brname.encode("ascii"), ifindex)
-            fcntl.ioctl(s.fileno(), 0x89a2, ifreq)                          # SIOCBRADDIF
-        finally:
-            s.close()
-
-    @staticmethod
-    def readDnsmasqLeaseFile(filename):
-        """dnsmasq leases file has the following format:
-             1108086503   00:b0:d0:01:32:86 142.174.150.208 M61480    01:00:b0:d0:01:32:86
-             ^            ^                 ^               ^         ^
-             Expiry time  MAC address       IP address      hostname  Client-id
-
-           This function returns [(mac,ip,hostname), (mac,ip,hostname)]
-        """
-
-        pattern = "[0-9]+ +([0-9a-f:]+) +([0-9\.]+) +(\\S+) +\\S+"
-        ret = []
-        with open(filename, "r") as f:
-            for line in f.read().split("\n"):
-                m = re.match(pattern, line)
-                if m is None:
-                    continue
-                if m.group(3) == "*":
-                    item = (m.group(1), m.group(2), "")
-                else:
-                    item = (m.group(1), m.group(2), m.group(3))
-                ret.append(item)
-        return ret

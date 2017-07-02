@@ -1,12 +1,11 @@
 #!/usr/bin/python3
-# this code is not used yet
-# reason: socket.recvfrom() is not interrupted when socket.close() is called in other thread, so we still need a timeout. sucks!
 
-import os
 import sys
 import json
 import socket
 
+
+serverFile = "/tmp/wrtd/vpns-n2n/cmd.socket"        # fixme
 
 data = dict()
 if sys.argv[1] == "add":
@@ -16,7 +15,7 @@ elif sys.argv[1] == "old":
 elif sys.argv[1] == "del":
     data["cmd"] = "remove"
 else:
-    return    # ignore unsupported action according to dnsmasq's manpage
+    sys.exit(0)    # ignore unsupported action according to dnsmasq's manpage
 
 data["mac"] = sys.argv[2]
 data["ip"] = sys.argv[3]
