@@ -286,7 +286,7 @@ class _VirtualBridge:
 
     def __cmdServerWatch(self, source, cb_condition):
         try:
-            buf = self.cmdSock.recvfrom(4096).decode("utf-8")
+            buf = self.cmdSock.recvfrom(4096)[0].decode("utf-8")
             jsonObj = json.loads(buf)
             if jsonObj["cmd"] == "add-or-change":
                 # notify lan manager
