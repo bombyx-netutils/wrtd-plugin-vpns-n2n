@@ -6,11 +6,12 @@ import re
 import pwd
 import grp
 import time
+import fcntl
+import signal
 import shutil
 import socket
 import struct
-import fcntl
-import signal
+import logging
 import ipaddress
 import netifaces
 import subprocess
@@ -38,6 +39,7 @@ class _PluginObject:
         self.cfg = cfg
         self.tmpDir = tmpDir
         self.firewallAllowFunc = firewallAllowFunc
+        self.logger = logging.getLogger(self.__module__ + "." + self.__class__.__name__)
 
         self.bridge = _VirtualBridge(self, bridgePrefix, l2DnsPort, clientAppearFunc, clientDisappearFunc)
         self.n2nSupernodeProc = None
@@ -280,6 +282,11 @@ class _VirtualBridge:
             setDisappear = self.lastScanRecord - ret
             ipList = [x[1] for x in setDisappear]
             self.clientDisappearFunc(ipList, self.get_bridge_id())
+            for mac, ip, hostname in setDisappear:
+                if hostname != "":
+                    self.pObj.logger.info("Client %s(IP:%s, MAC:%s) disappeared." % (hostname, ip, mac))
+                else:
+                    self.pObj.logger.info("Client %s(%s) disappeared." % (ip, mac))
 
             # host appear
             setAppear = ret - self.lastScanRecord
@@ -289,9 +296,14 @@ class _VirtualBridge:
                 ipDataDict[ip]["wakeup-mac"] = mac
                 if hostname != "":
                     ipDataDict[ip]["hostname"] = hostname
+                    self.pObj.logger.info("Client %s(IP:%s, MAC:%s) appeared." % (hostname, ip, mac))
+                else:
+                    self.pObj.logger.info("Client %s(%s) appeared." % (ip, mac))
             self.clientAppearFunc(ipDataDict, self.get_bridge_id())
 
             self.lastScanRecord = ret
+        except:
+            self.pObj.logger.error("Lease scan failed", exc_info=True)
         finally:
             return True
 
