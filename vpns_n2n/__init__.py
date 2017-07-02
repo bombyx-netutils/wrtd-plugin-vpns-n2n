@@ -302,7 +302,7 @@ class _VirtualBridge:
             else:
                 assert False
         except:
-            self.logger.error("receive error", exc_info=True)       # fixme
+            self.pObj.logger.error("receive error", exc_info=True)       # fixme
         finally:
             return True
 
