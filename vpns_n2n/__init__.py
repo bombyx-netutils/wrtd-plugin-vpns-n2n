@@ -292,9 +292,10 @@ class _VirtualBridge:
                 # notify lan manager
                 data = dict()
                 data[jsonObj["ip"]] = dict()
-                data[jsonObj["ip"]]["hostname"] = jsonObj["hostname"]
+                if "hostname" in jsonObj:
+                    data[jsonObj["ip"]]["hostname"] = jsonObj["hostname"]
                 self.clientAppearFunc(self.get_bridge_id(), data)
-            elif jsonObj["cmd"] == "del":
+            elif jsonObj["cmd"] == "remove":
                 # notify lan manager
                 data = [jsonObj["ip"]]
                 self.clientDisappearFunc(self.get_bridge_id(), data)
