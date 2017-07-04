@@ -13,6 +13,7 @@ import logging
 import ipaddress
 import netifaces
 import subprocess
+from collections import OrderedDict
 from gi.repository import GLib
 
 
@@ -165,15 +166,32 @@ class _VirtualBridge:
         os.unlink(os.path.join(self.hostsDir, source_id))
 
     def on_host_add_or_change(self, source_id, ip_data_dict):
-        bChanged = False
         fn = os.path.join(self.hostsDir, source_id)
-        with open(fn, "a") as f:
-            for ip, data in ip_data_dict.items():
+        bChanged = False
+
+        itemDict = OrderedDict()
+        with open(fn, "r") as f:
+            for line in f.read().rstrip("\n").split("\n"):
+                itemDict[line.split(" ")[0]] = line.split(" ")[1]
+
+        for ip, data in ip_data_dict.items():
+            if ip in itemDict:
                 if "hostname" in data:
-                    f.write(ip + " " + data["hostname"] + "\n")
+                    if itemDict[ip] != data["hostname"]:
+                        itemDict[ip] = data["hostname"]
+                        bChanged = True
+                else:
+                    del itemDict[ip]
+                    bChanged = True
+            else:
+                if "hostname" in data:
+                    itemDict[ip] = data["hostname"]
                     bChanged = True
 
         if bChanged:
+            with open(fn, "w") as f:
+                for ip, hostname in itemDict.items():
+                    f.write(ip + " " + hostname + "\n")
             self.dnsmasqProc.send_signal(signal.SIGHUP)
 
     def on_host_remove(self, source_id, ip_list):
@@ -200,18 +218,20 @@ class _VirtualBridge:
     def on_host_refresh(self, source_id, ip_data_dict):
         fn = os.path.join(self.hostsDir, source_id)
 
-        buf = ""
+        itemDict = dict()
         with open(fn, "r") as f:
-            buf = f.read()
+            for line in f.read().rstrip("\n").split("\n"):
+                itemDict[line.split(" ")[0]] = line.split(" ")[1]
 
-        buf2 = ""
+        itemDict2 = dict()
         for ip, data in ip_data_dict.items():
             if "hostname" in data:
-                buf2 += ip + " " + data["hostname"] + "\n"
+                itemDict[ip] = data["hostname"]
 
-        if buf != buf2:
+        if itemDict != itemDict2:
             with open(fn, "w") as f:
-                f.write(buf2)
+                for ip, hostname in itemDict2:
+                    f.write(ip + " " + data["hostname"] + "\n")
             self.dnsmasqProc.send_signal(signal.SIGHUP)
 
     def _runCmdServer(self):
