@@ -344,5 +344,5 @@ class _Util:
     @staticmethod
     def dictToDnsmasqHostFile(ipHostnameDict, filename):
         with open(filename, "w") as f:
-            for ip, hostname in ipHostnameDict:
+            for ip, hostname in ipHostnameDict.items():
                 f.write(ip + " " + hostname + "\n")
