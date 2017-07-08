@@ -14,7 +14,6 @@ import ipaddress
 import netifaces
 import subprocess
 from collections import OrderedDict
-from gi.repository import GLib
 from gi.repository import Gio
 
 
@@ -50,10 +49,8 @@ class _PluginObject:
         self._runN2nSupernode()
         self.bridge._runN2nEdgeNode()
         self.bridge._runDnsmasq()
-        self.bridge._runCmdServer()
 
     def stop(self):
-        self.bridge._stopCmdServer()
         self.bridge._stopDnsmasq()
         self.bridge._stopN2nEdgeNode()
         self._stopN2nSupernode()
@@ -108,10 +105,6 @@ class _VirtualBridge:
         self.dhcpRange = (self.brip + 1, self.brip + 49)
 
         self.edgeProc = None
-
-        self.serverFile = os.path.join(self.pObj.tmpDir, "cmd.socket")
-        self.cmdSock = None
-        self.cmdSockWatch = None
 
         self.myhostnameFile = os.path.join(self.pObj.tmpDir, "dnsmasq.myhostname")
         self.selfHostFile = os.path.join(self.pObj.tmpDir, "dnsmasq.self")
@@ -217,19 +210,6 @@ class _VirtualBridge:
         if itemDict != itemDict2:
             _Util.dictToDnsmasqHostFile(itemDict2, fn)
             self.dnsmasqProc.send_signal(signal.SIGHUP)
-
-    def _runCmdServer(self):
-        self.cmdSock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-        self.cmdSock.bind(self.serverFile)
-        self.cmdSockWatch = GLib.io_add_watch(self.cmdSock, GLib.IO_IN, self.__cmdServerWatch)
-
-    def _stopCmdServer(self):
-        if self.cmdSockWatch is not None:
-            GLib.source_remove(self.cmdSockWatch)
-            self.cmdSockWatch = None
-        if self.cmdSock is not None:
-            self.cmdSock.close()
-            self.cmdSock = None
 
     def _runDnsmasq(self):
         # myhostname file
