@@ -12,7 +12,6 @@ install:
 	cp -r $(plugin) "$(DESTDIR)/$(prefix)/lib/wrtd/plugins"
 	find "$(DESTDIR)/$(prefix)/lib/wrtd/plugins/$(plugin)" -type f | xargs chmod 644
 	find "$(DESTDIR)/$(prefix)/lib/wrtd/plugins/$(plugin)" -type d | xargs chmod 755
-	chmod 755 "$(DESTDIR)/$(prefix)/lib/wrtd/plugins/$(plugin)"/dhcp-script.py
 
 uninstall:
 	rm -rf "$(DESTDIR)/$(prefix)/lib/wrtd/plugins/$(plugin)"
