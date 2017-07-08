@@ -305,10 +305,10 @@ class _VirtualBridge:
             for expiryTime, mac, ip, hostname, clientId in changeList:
                 self.__dnsmasqLeaseChangedAddToIpDataDict(ipDataDict, ip, mac, hostname)
                 # log is not needed for client change
-            self.clientAddOrChangeFunc(ipDataDict, self.get_bridge_id())
+            self.clientAddOrChangeFunc(self.get_bridge_id(), ipDataDict)
 
             ipList = [x[2] for x in removeList]
-            self.clientRemoveFunc(ipList, self.get_bridge_id())
+            self.clientRemoveFunc(self.get_bridge_id(), ipList)
             for expiryTime, mac, ip, hostname, clientId in removeList:
                 if hostname != "":
                     self.pObj.logger.info("Client %s(IP:%s, MAC:%s) disappeared." % (hostname, ip, mac))
