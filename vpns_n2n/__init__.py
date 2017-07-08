@@ -285,25 +285,25 @@ class _VirtualBridge:
             changeList = []
             removeList = []
             for item in newLeaseList:
-                item2 = self.__leaseScanFind(item, self.lastScanRecord)
+                item2 = self.___dnsmasqLeaseChangedFind(item, self.lastScanRecord)
                 if item2 is not None:
                     if item[1] != item2[1] or item[3] != item2[3]:      # mac or hostname change
                         changeList.append(item)
                 else:
                     addList.append(item)
             for item in self.lastScanRecord:
-                if self.__leaseScanFind(item, newLeaseList) is None:
+                if self.___dnsmasqLeaseChangedFind(item, newLeaseList) is None:
                     removeList.append(item)
 
             ipDataDict = dict()
             for expiryTime, mac, ip, hostname, clientId in addList:
-                self.__leaseScanAddToIpDataDict(ipDataDict, ip, mac, hostname)
+                self.__dnsmasqLeaseChangedAddToIpDataDict(ipDataDict, ip, mac, hostname)
                 if hostname != "":
                     self.pObj.logger.info("Client %s(IP:%s, MAC:%s) appeared." % (hostname, ip, mac))
                 else:
                     self.pObj.logger.info("Client %s(%s) appeared." % (ip, mac))
             for expiryTime, mac, ip, hostname, clientId in changeList:
-                self.__leaseScanAddToIpDataDict(ipDataDict, ip, mac, hostname)
+                self.__dnsmasqLeaseChangedAddToIpDataDict(ipDataDict, ip, mac, hostname)
                 # log is not needed for client change
             self.clientAddOrChangeFunc(ipDataDict, self.get_bridge_id())
 
