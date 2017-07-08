@@ -2,10 +2,10 @@
 # -*- coding: utf-8; tab-width: 4; indent-tabs-mode: t -*-
 
 import os
+import re
 import pwd
 import grp
 import time
-import json
 import signal
 import shutil
 import socket
@@ -15,6 +15,7 @@ import netifaces
 import subprocess
 from collections import OrderedDict
 from gi.repository import GLib
+from gi.repository import Gio
 
 
 def get_plugin_list():
@@ -118,6 +119,8 @@ class _VirtualBridge:
         self.leasesFile = os.path.join(self.pObj.tmpDir, "dnsmasq.leases")
         self.pidFile = os.path.join(self.pObj.tmpDir, "dnsmasq.pid")
         self.dnsmasqProc = None
+        self.leaseMonitor = None
+        self.lastScanRecord = None
 
     def get_name(self):
         return self.brname
@@ -229,8 +232,6 @@ class _VirtualBridge:
             self.cmdSock = None
 
     def _runDnsmasq(self):
-        selfdir = os.path.dirname(os.path.realpath(__file__))
-
         # myhostname file
         with open(self.myhostnameFile, "w") as f:
             f.write("%s %s\n" % (self.brip, socket.gethostname()))
@@ -255,7 +256,6 @@ class _VirtualBridge:
         buf += "dhcp-range=%s,%s,%s,360\n" % (self.dhcpRange[0], self.dhcpRange[1], self.brnetwork.netmask)
         buf += "dhcp-option=option:T1,180\n"                             # strange that dnsmasq's T1=165s, change to 180s which complies to RFC
         buf += "dhcp-leasefile=%s\n" % (self.leasesFile)
-        buf += "dhcp-script=%s\n" % (os.path.join(selfdir, "dhcp-script.py"))
         buf += "\n"
         buf += "domain-needed\n"
         buf += "bogus-priv\n"
@@ -275,7 +275,16 @@ class _VirtualBridge:
         cmd += " --pid-file=%s" % (self.pidFile)
         self.dnsmasqProc = subprocess.Popen(cmd, shell=True, universal_newlines=True)
 
+        # monitor dnsmasq lease file
+        self.leaseMonitor = Gio.File.new_for_path(self.leasesFile).monitor(0, None)
+        self.leaseMonitor.connect("changed", self._dnsmasqLeaseChanged)
+        self.lastScanRecord = []
+
     def _stopDnsmasq(self):
+        self.lastScanRecord = None
+        if self.leaseMonitor is not None:
+            self.leaseMonitor.cancel()
+            self.leaseMonitor = None
         if self.dnsmasqProc is not None:
             self.dnsmasqProc.terminate()
             self.dnsmasqProc.wait()
@@ -285,27 +294,62 @@ class _VirtualBridge:
         _Util.forceDelete(self.hostsDir)
         _Util.forceDelete(self.myhostnameFile)
 
-    def __cmdServerWatch(self, source, cb_condition):
+    def _dnsmasqLeaseChanged(self, monitor, file, other_file, event_type):
+        if event_type != Gio.FileMonitorEvent.CHANGED:
+            return
+
         try:
-            buf = self.cmdSock.recvfrom(4096)[0].decode("utf-8")
-            jsonObj = json.loads(buf)
-            if jsonObj["cmd"] == "add-or-change":
-                # notify lan manager
-                data = dict()
-                data[jsonObj["ip"]] = dict()
-                if "hostname" in jsonObj:
-                    data[jsonObj["ip"]]["hostname"] = jsonObj["hostname"]
-                self.clientAppearFunc(self.get_bridge_id(), data)
-            elif jsonObj["cmd"] == "remove":
-                # notify lan manager
-                data = [jsonObj["ip"]]
-                self.clientDisappearFunc(self.get_bridge_id(), data)
-            else:
-                assert False
-        except:
-            self.pObj.logger.error("receive error", exc_info=True)       # fixme
-        finally:
-            return True
+            newLeaseList = _Util.readDnsmasqLeaseFile(self.leasesFile)
+
+            addList = []
+            changeList = []
+            removeList = []
+            for item in newLeaseList:
+                item2 = self.__leaseScanFind(item, self.lastScanRecord)
+                if item2 is not None:
+                    if item[1] != item2[1] or item[3] != item2[3]:      # mac or hostname change
+                        changeList.append(item)
+                else:
+                    addList.append(item)
+            for item in self.lastScanRecord:
+                if self.__leaseScanFind(item, newLeaseList) is None:
+                    removeList.append(item)
+
+            ipDataDict = dict()
+            for expiryTime, mac, ip, hostname, clientId in addList:
+                self.__leaseScanAddToIpDataDict(ipDataDict, ip, mac, hostname)
+                if hostname != "":
+                    self.pObj.logger.info("Client %s(IP:%s, MAC:%s) appeared." % (hostname, ip, mac))
+                else:
+                    self.pObj.logger.info("Client %s(%s) appeared." % (ip, mac))
+            for expiryTime, mac, ip, hostname, clientId in changeList:
+                self.__leaseScanAddToIpDataDict(ipDataDict, ip, mac, hostname)
+                # log is not needed for client change
+            self.clientAddOrChangeFunc(ipDataDict, self.get_bridge_id())
+
+            ipList = [x[2] for x in removeList]
+            self.clientRemoveFunc(ipList, self.get_bridge_id())
+            for expiryTime, mac, ip, hostname, clientId in removeList:
+                if hostname != "":
+                    self.pObj.logger.info("Client %s(IP:%s, MAC:%s) disappeared." % (hostname, ip, mac))
+                else:
+                    self.pObj.logger.info("Client %s(%s) disappeared." % (ip, mac))
+
+            self.lastScanRecord = newLeaseList
+        except Exception as e:
+            self.pObj.logger.error("Lease scan failed", exc_info=True)      # fixme
+
+    def ___dnsmasqLeaseChangedFind(self, item, leaseList):
+        for item2 in leaseList:
+            if item2[2] == item[2]:     # compare by ip
+                return item2
+        return None
+
+    def __dnsmasqLeaseChangedAddToIpDataDict(self, ipDataDict, ip, mac, hostname):
+        ipDataDict[ip] = dict()
+        ipDataDict[ip]["wakeup-mac"] = mac
+        if hostname != "":
+            ipDataDict[ip]["hostname"] = hostname
 
 
 class _Util:
@@ -318,6 +362,31 @@ class _Util:
             os.remove(filename)
         elif os.path.isdir(filename):
             shutil.rmtree(filename)
+
+    @staticmethod
+    def readDnsmasqLeaseFile(filename):
+        """dnsmasq leases file has the following format:
+             1108086503   00:b0:d0:01:32:86 142.174.150.208 M61480    01:00:b0:d0:01:32:86
+             ^            ^                 ^               ^         ^
+             Expiry time  MAC address       IP address      hostname  Client-id
+
+           This function returns [(expiry-time,mac,ip,hostname,client-id), (expiry-time,mac,ip,hostname,client-id)]
+        """
+
+        pattern = "([0-9]+) +([0-9a-f:]+) +([0-9\.]+) +(\\S+) +(\\S+)"
+        ret = []
+        with open(filename, "r") as f:
+            for line in f.read().split("\n"):
+                m = re.match(pattern, line)
+                if m is None:
+                    continue
+                expiryTime = m.group(1)
+                mac = m.group(2)
+                ip = m.group(3)
+                hostname = "" if m.group(4) == "*" else m.group(4)
+                clientId = "" if m.group(5) == "*" else m.group(5)
+                ret.append((expiryTime, mac, ip, hostname, clientId))
+        return ret
 
     @staticmethod
     def dnsmasqHostFileToDict(filename):
