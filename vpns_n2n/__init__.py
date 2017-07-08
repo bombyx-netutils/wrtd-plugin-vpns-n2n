@@ -32,14 +32,14 @@ def get_plugin(name):
 
 class _PluginObject:
 
-    def init2(self, instanceName, cfg, tmpDir, varDir, bridgePrefix, l2DnsPort, clientAppearFunc, clientDisappearFunc, firewallAllowFunc):
+    def init2(self, instanceName, cfg, tmpDir, varDir, bridgePrefix, l2DnsPort, clientAddOrChangeFunc, clientRemoveFunc, firewallAllowFunc):
         assert instanceName == ""
         self.cfg = cfg
         self.tmpDir = tmpDir
         self.firewallAllowFunc = firewallAllowFunc
         self.logger = logging.getLogger(self.__module__ + "." + self.__class__.__name__)
 
-        self.bridge = _VirtualBridge(self, bridgePrefix, l2DnsPort, clientAppearFunc, clientDisappearFunc)
+        self.bridge = _VirtualBridge(self, bridgePrefix, l2DnsPort, clientAddOrChangeFunc, clientRemoveFunc)
         self.n2nSupernodeProc = None
 
     def set_other_bridge_list(self, other_bridge_list):
@@ -90,13 +90,13 @@ class _PluginObject:
 
 class _VirtualBridge:
 
-    def __init__(self, pObj, prefix, l2DnsPort, clientAppearFunc, clientDisappearFunc):
+    def __init__(self, pObj, prefix, l2DnsPort, clientAddOrChangeFunc, clientRemoveFunc):
         assert prefix[1] == "255.255.255.0"
 
         self.pObj = pObj
         self.l2DnsPort = l2DnsPort
-        self.clientAppearFunc = clientAppearFunc
-        self.clientDisappearFunc = clientDisappearFunc
+        self.clientAddOrChangeFunc = clientAddOrChangeFunc
+        self.clientRemoveFunc = clientRemoveFunc
 
         self.brname = "wrtd-vpns-n2n"
         self.brnetwork = ipaddress.IPv4Network(prefix[0] + "/" + prefix[1])
