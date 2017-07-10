@@ -32,14 +32,14 @@ def get_plugin(name):
 
 class _PluginObject:
 
-    def init2(self, instanceName, cfg, tmpDir, varDir, bridgePrefix, l2DnsPort, clientAddOrChangeFunc, clientRemoveFunc, firewallAllowFunc):
+    def init2(self, instanceName, cfg, tmpDir, varDir, bridgePrefix, l2DnsPort, clientAddFunc, clientChangeFunc, clientRemoveFunc, firewallAllowFunc):
         assert instanceName == ""
         self.cfg = cfg
         self.tmpDir = tmpDir
         self.firewallAllowFunc = firewallAllowFunc
         self.logger = logging.getLogger(self.__module__ + "." + self.__class__.__name__)
 
-        self.bridge = _VirtualBridge(self, bridgePrefix, l2DnsPort, clientAddOrChangeFunc, clientRemoveFunc)
+        self.bridge = _VirtualBridge(self, bridgePrefix, l2DnsPort, clientAddFunc, clientChangeFunc, clientRemoveFunc)
         self.n2nSupernodeProc = None
 
     def set_other_bridge_list(self, other_bridge_list):
@@ -90,12 +90,13 @@ class _PluginObject:
 
 class _VirtualBridge:
 
-    def __init__(self, pObj, prefix, l2DnsPort, clientAddOrChangeFunc, clientRemoveFunc):
+    def __init__(self, pObj, prefix, l2DnsPort, clientAddFunc, clientChangeFunc, clientRemoveFunc):
         assert prefix[1] == "255.255.255.0"
 
         self.pObj = pObj
         self.l2DnsPort = l2DnsPort
-        self.clientAddOrChangeFunc = clientAddOrChangeFunc
+        self.clientAddFunc = clientAddFunc
+        self.clientChangeFunc = clientChangeFunc
         self.clientRemoveFunc = clientRemoveFunc
 
         self.brname = "wrtd-vpns-n2n"
@@ -295,7 +296,7 @@ class _VirtualBridge:
                 if self.___dnsmasqLeaseChangedFind(item, newLeaseList) is None:
                     removeList.append(item)
 
-            if len(addList) > 0 or len(changeList) > 0:
+            if len(addList) > 0:
                 ipDataDict = dict()
                 for expiryTime, mac, ip, hostname, clientId in addList:
                     self.__dnsmasqLeaseChangedAddToIpDataDict(ipDataDict, ip, mac, hostname)
@@ -303,10 +304,14 @@ class _VirtualBridge:
                         self.pObj.logger.info("Client %s(IP:%s, MAC:%s) appeared." % (hostname, ip, mac))
                     else:
                         self.pObj.logger.info("Client %s(%s) appeared." % (ip, mac))
+                self.clientAddFunc(self.get_bridge_id(), ipDataDict)
+
+            if len(changeList) > 0:
+                ipDataDict = dict()
                 for expiryTime, mac, ip, hostname, clientId in changeList:
                     self.__dnsmasqLeaseChangedAddToIpDataDict(ipDataDict, ip, mac, hostname)
                     # log is not needed for client change
-                self.clientAddOrChangeFunc(self.get_bridge_id(), ipDataDict)
+                self.clientChangeFunc(self.get_bridge_id(), ipDataDict)
 
             if len(removeList) > 0:
                 ipList = [x[2] for x in removeList]
