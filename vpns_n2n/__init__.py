@@ -42,9 +42,6 @@ class _PluginObject:
         self.bridge = _VirtualBridge(self, bridgePrefix, l2DnsPort, clientAddFunc, clientChangeFunc, clientRemoveFunc)
         self.n2nSupernodeProc = None
 
-    def set_other_bridge_list(self, other_bridge_list):
-        pass
-
     def start(self):
         self._runN2nSupernode()
         self.bridge._runN2nEdgeNode()
