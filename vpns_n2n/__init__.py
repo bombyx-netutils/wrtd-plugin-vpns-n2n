@@ -32,11 +32,10 @@ def get_plugin(name):
 
 class _PluginObject:
 
-    def init2(self, instanceName, cfg, tmpDir, varDir, bridgePrefix, l2DnsPort, clientAddFunc, clientChangeFunc, clientRemoveFunc, firewallAllowFunc):
+    def init2(self, instanceName, cfg, tmpDir, varDir, bridgePrefix, l2DnsPort, clientAddFunc, clientChangeFunc, clientRemoveFunc):
         assert instanceName == ""
         self.cfg = cfg
         self.tmpDir = tmpDir
-        self.firewallAllowFunc = firewallAllowFunc
         self.logger = logging.getLogger(self.__module__ + "." + self.__class__.__name__)
 
         self.bridge = _VirtualBridge(self, bridgePrefix, l2DnsPort, clientAddFunc, clientChangeFunc, clientRemoveFunc)
@@ -57,6 +56,12 @@ class _PluginObject:
         assert self.bridge.edgeProc is not None
         return self.bridge
 
+    def get_wan_service(self):
+        ret = dict()
+        ret["firewall_allow_list"] = []
+        ret["firewall_allow_list"].append("udp dport 7654")
+        return ret
+
     def generate_client_script(self, ip, ostype):
         if ostype == "linux":
             selfdir = os.path.dirname(os.path.realpath(__file__))
@@ -76,7 +81,6 @@ class _PluginObject:
         supernodeLogFile = os.path.join(self.tmpDir, "supernode.log")
         cmd = "/usr/sbin/supernode -f >%s 2>%s" % (supernodeLogFile, supernodeLogFile)
         self.n2nSupernodeProc = subprocess.Popen(cmd, shell=True, universal_newlines=True)
-        self.firewallAllowFunc("udp dport 7654")
 
     def _stopN2nSupernode(self):
         if self.n2nSupernodeProc is not None:
