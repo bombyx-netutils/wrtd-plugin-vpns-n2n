@@ -149,20 +149,13 @@ class _VirtualBridge:
             self.edgeProc = None
 
     def on_source_add(self, source_id):
-        if source_id == self.get_bridge_id():
-            return
         with open(os.path.join(self.hostsDir, source_id), "w") as f:
             f.write("")
 
     def on_source_remove(self, source_id):
-        if source_id == self.get_bridge_id():
-            return
         os.unlink(os.path.join(self.hostsDir, source_id))
 
     def on_host_add(self, source_id, ip_data_dict):
-        if source_id == self.get_bridge_id():
-            return
-
         fn = os.path.join(self.hostsDir, source_id)
         itemDict = _Util.dnsmasqHostFileToOrderedDict(fn)
         bChanged = False
@@ -189,9 +182,6 @@ class _VirtualBridge:
         self.on_host_add(source_id, ip_data_dict)
 
     def on_host_remove(self, source_id, ip_list):
-        if source_id == self.get_bridge_id():
-            return
-
         fn = os.path.join(self.hostsDir, source_id)
         itemDict = _Util.dnsmasqHostFileToOrderedDict(fn)
         bChanged = False
@@ -206,9 +196,6 @@ class _VirtualBridge:
             self.dnsmasqProc.send_signal(signal.SIGHUP)
 
     def on_host_refresh(self, source_id, ip_data_dict):
-        if source_id == self.get_bridge_id():
-            return
-
         fn = os.path.join(self.hostsDir, source_id)
         itemDict = _Util.dnsmasqHostFileToDict(fn)
 
