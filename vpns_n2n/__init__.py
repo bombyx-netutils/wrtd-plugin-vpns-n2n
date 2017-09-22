@@ -179,7 +179,7 @@ class _VirtualBridge:
             self.dnsmasqProc.send_signal(signal.SIGHUP)
 
     def change_host(self, source_id, ip_data_dict):
-        self.on_host_add(source_id, ip_data_dict)
+        self.add_host(source_id, ip_data_dict)
 
     def remove_host(self, source_id, ip_list):
         fn = os.path.join(self.hostsDir, source_id)
